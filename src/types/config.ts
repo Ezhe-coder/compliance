@@ -29,5 +29,16 @@ export const defaultApis: ApiConfig[] = [
     ],
     bodyTemplate: '{\n  "input": "{{text}}"\n}',
     isActive: true
+  },
+  {
+    id: 'hive-deepfake-proxy',
+    name: 'The Hive (Deepfake Detection)',
+    endpoint: '/api/proxy/hive',
+    method: 'POST',
+    headers: [
+      { key: 'Content-Type', value: 'application/json' }
+    ],
+    bodyTemplate: '{\n  "image_base64": "{{base64}}"\n}',
+    isActive: true
   }
 ];

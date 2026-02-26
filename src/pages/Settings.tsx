@@ -50,6 +50,16 @@ export default function Settings() {
             <Plus size={16} />
             Add New API
           </button>
+          <button 
+            onClick={() => {
+              if (confirm('Reset all API configurations to default? This will lose your custom settings.')) {
+                setApis(defaultApis);
+              }
+            }}
+            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 ml-2"
+          >
+            Reset Defaults
+          </button>
         </div>
         
         <div className="divide-y divide-gray-100">
