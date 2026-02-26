@@ -1,12 +1,18 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { UploadCloud, File, X, Loader2, ArrowRight } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { UploadCloud, File, X, Loader2, ArrowRight, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { useLocalStorage } from '../hooks/useLocalStorage';
+import { ApiConfig, ScanResult } from '../types/config';
+import { runComplianceScan } from '../services/complianceService';
 
 export default function Scan() {
   const [files, setFiles] = useState<File[]>([]);
   const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<string | null>(null);
+  const [results, setResults] = useState<ScanResult[]>([]);
+  
+  // Load configs to pass to service
+  const [apis] = useLocalStorage<ApiConfig[]>('compliance_apis', []);
+  const [savedReports, setSavedReports] = useLocalStorage<ScanResult[]>('compliance_reports', []);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setFiles((prev) => [...prev, ...acceptedFiles]);
@@ -15,7 +21,8 @@ export default function Scan() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
     onDrop,
     accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.svg']
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.svg'],
+      'text/*': ['.txt', '.json', '.md']
     }
   } as any);
 
@@ -26,17 +33,26 @@ export default function Scan() {
   const handleScan = async () => {
     if (files.length === 0) return;
     setIsScanning(true);
-    setScanResult(null);
+    setResults([]);
 
     try {
-      // Simulate API call or use Gemini if configured
-      // For now, we'll just simulate a delay and a mock response
-      // In a real implementation, this would loop through configured APIs
+      const activeApis = apis.filter(a => a.isActive);
+      if (activeApis.length === 0) {
+        alert("No active APIs configured. Please go to Settings to configure an API.");
+        setIsScanning(false);
+        return;
+      }
+
+      const allResults: ScanResult[] = [];
       
-      // Mock delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      for (const file of files) {
+        const fileResults = await runComplianceScan(file, apis);
+        allResults.push(...fileResults);
+      }
+
+      setResults(allResults);
+      setSavedReports([...savedReports, ...allResults]);
       
-      setScanResult("Scan complete. No critical compliance issues found in the uploaded assets.");
     } catch (error) {
       console.error("Scan failed", error);
     } finally {
@@ -45,7 +61,7 @@ export default function Scan() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
+    <div className="max-w-3xl mx-auto space-y-8 pb-12">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">New Compliance Scan</h1>
         <p className="text-gray-500 mt-1">Upload media assets to run against your configured compliance APIs.</p>
@@ -66,7 +82,7 @@ export default function Scan() {
           </div>
           <div>
             <p className="text-lg font-medium text-gray-900">Click to upload or drag and drop</p>
-            <p className="text-sm text-gray-500 mt-1">SVG, PNG, JPG or GIF (max. 800x400px)</p>
+            <p className="text-sm text-gray-500 mt-1">Images or Text files</p>
           </div>
         </div>
       </div>
@@ -124,26 +140,38 @@ export default function Scan() {
       </div>
 
       {/* Results Preview */}
-      {scanResult && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 animate-in fade-in slide-in-from-bottom-4">
-          <div className="flex items-start gap-3">
-            <div className="mt-1">
-              <div className="h-6 w-6 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
-                <CheckCircle size={14} />
+      {results.length > 0 && (
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+          <h2 className="font-semibold text-gray-900">Scan Results</h2>
+          {results.map((res) => (
+            <div key={res.id} className={`
+              border rounded-xl p-4 flex items-start gap-4
+              ${res.status === 'Compliant' ? 'bg-emerald-50 border-emerald-200' : 
+                res.status === 'Error' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}
+            `}>
+              <div className="mt-1">
+                {res.status === 'Compliant' && <CheckCircle size={20} className="text-emerald-600" />}
+                {res.status === 'Issues Found' && <AlertTriangle size={20} className="text-amber-600" />}
+                {res.status === 'Error' && <XCircle size={20} className="text-red-600" />}
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <div className="flex justify-between items-start">
+                  <h3 className={`font-medium ${
+                    res.status === 'Compliant' ? 'text-emerald-900' : 
+                    res.status === 'Error' ? 'text-red-900' : 'text-amber-900'
+                  }`}>
+                    {res.fileName}
+                  </h3>
+                  <span className="text-xs text-gray-500">{res.apiName}</span>
+                </div>
+                <div className="mt-2 bg-white/50 rounded p-2 text-xs font-mono overflow-auto max-h-32">
+                  <pre>{JSON.stringify(res.details, null, 2)}</pre>
+                </div>
               </div>
             </div>
-            <div>
-              <h3 className="text-lg font-medium text-emerald-900">Scan Complete</h3>
-              <p className="text-emerald-700 mt-1">{scanResult}</p>
-              <button className="mt-4 text-sm font-medium text-emerald-700 hover:text-emerald-800 underline">
-                View Full Report
-              </button>
-            </div>
-          </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
-
-import { CheckCircle } from 'lucide-react';
